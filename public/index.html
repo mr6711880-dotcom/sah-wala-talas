@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>صح ولا طلس؟</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<style>
+:root{--bg:#eef3f4;--card:#fff;--ink:#0f2a33;--mute:#587079;--line:#d3dfe2;--nile:#0f4c5c;--on:#fff;
+--ok:#14783f;--bad:#b3261e;--un:#946200}
+@media (prefers-color-scheme:dark){:root{--bg:#0c1a1f;--card:#12262c;--ink:#e8f1f3;--mute:#8fa9b1;--line:#24404a;--nile:#5cc2d6;--on:#06232b;
+--ok:#6fdca0;--bad:#ff8f86;--un:#ffd27a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Arabic",Tahoma,system-ui,sans-serif;line-height:1.85}
+main{max-width:620px;margin:0 auto;padding:28px 16px 56px}
+h1{margin:0;font-size:2.2rem;color:var(--nile)}
+.sub{color:var(--mute);margin:2px 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit;background:var(--bg);color:var(--ink);resize:vertical}
+textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid var(--nile);outline-offset:2px}
+button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:12px;background:var(--nile);color:var(--on);cursor:pointer;width:100%;margin-top:12px}
+button:disabled{opacity:.6;cursor:wait}
+.stamp{display:inline-block;border:5px double currentColor;border-radius:10px;padding:2px 28px;font-size:2.4rem;font-weight:700;transform:rotate(-4deg);margin:8px 0}
+.stamp.sahh{color:var(--ok)}.stamp.talas{color:var(--bad)}.stamp.unsure{color:var(--un)}
+.res{margin-top:20px}
+.top{text-align:center;padding:8px 0 4px}
+h3{margin:16px 0 2px;font-size:1.05rem}
+ul{margin:0;padding-inline-start:20px}
+.src a{color:var(--nile)}
+.note{font-size:.85rem;color:var(--mute);text-align:center;margin-top:20px}
+.err{color:var(--bad);margin-top:12px}
+@media (prefers-reduced-motion:no-preference){.stamp{animation:hit .25s ease-out}@keyframes hit{from{transform:rotate(-4deg) scale(1.5);opacity:0}}}
+</style>
+</head>
+<body>
+<main>
+  <h1>صح ولا طلس؟</h1>
+  <p class="sub">الصق الخبر، ونبحث عنه في مصادر حديثة.</p>
+  <div class="card">
+    <textarea id="claim" maxlength="1500" placeholder="الصق الخبر أو الرسالة كما وصلتك"></textarea>
+    <button id="go">افحص الخبر</button>
+    <div id="err" class="err" role="alert" hidden></div>
+  </div>
+  <div id="result" class="res" aria-live="polite"></div>
+  <p class="note">الفحص بالذكاء الاصطناعي مع بحث في الويب، وقد يخطئ. راجع المصادر قبل ما تنشر أي خبر.</p>
+</main>
+<script>
+const L = {sahh:"صح", talas:"طلس", unsure:"مش مؤكد"};
+const $ = id => document.getElementById(id);
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+
+function render(r) {
+  const v = L[r.verdict] ? r.verdict : "unsure";
+  const box = el("div", "card");
+  const top = el("div", "top");
+  top.append(el("div", "stamp " + v, L[v]), el("div", "", "درجة الثقة: " + (Math.max(0, Math.min(100, +r.confidence || 0))) + "%"));
+  box.append(top, el("p", "", r.summary || ""));
+  [["ليه كده؟", r.reasons], ["كيف تتأكد؟", r.checks]].forEach(([t, a]) => {
+    if (!Array.isArray(a) || !a.length) return;
+    const ul = el("ul"); a.forEach(x => ul.append(el("li", "", String(x))));
+    box.append(el("h3", "", t), ul);
+  });
+  if (Array.isArray(r.sources) && r.sources.length) {
+    const ul = el("ul", "src");
+    r.sources.forEach(s => {
+      const a = el("a", "", s.title); a.href = s.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+      const li = el("li"); li.append(a); ul.append(li);
+    });
+    box.append(el("h3", "", "المصادر"), ul);
+  }
+  $("result").replaceChildren(box);
+}
+
+$("go").addEventListener("click", async () => {
+  const claim = $("claim").value.trim();
+  $("err").hidden = true;
+  if (claim.length < 5) { $("err").textContent = "اكتب الخبر أول."; $("err").hidden = false; return; }
+  const b = $("go"); b.disabled = true; b.textContent = "بنبحث…"; $("result").replaceChildren();
+  try {
+    const r = await fetch("/api/check", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({claim})});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    render(d);
+  } catch (e) { $("err").textContent = e.message || "حصلت مشكلة، جرّب تاني."; $("err").hidden = false; }
+  finally { b.disabled = false; b.textContent = "افحص الخبر"; }
+});
+</script>
+</body>
+</html>
