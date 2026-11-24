@@ -3,13 +3,13 @@ import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const KEY = process.env.ANTHROPIC_API_KEY;
-const MODEL = process.env.MODEL || "claude-sonnet-5-5";
+const KEY = process.env.GEMINI_API_KEY;
+const MODEL = process.env.MODEL || "gemini-3.8-flash";
 const PORT = process.env.PORT || 3000;
 const RATE = Number(process.env.RATE_PER_HOUR) || 20;
 const DIR = join(dirname(fileURLToPath(import.meta.url)), "public");
 
-if (!KEY) { console.error("ناقص ANTHROPIC_API_KEY"); process.exit(1); }
+if (!KEY) { console.error("ناقص GEMINI_API_KEY"); process.exit(1); }
 
 const hits = new Map();
 function limited(ip) {
@@ -31,26 +31,24 @@ const SYSTEM = () => `انت محقق شائعات في تطبيق سوداني 
 {"verdict":"sahh|talas|unsure","confidence":0-100,"summary":"جملة او جملتين","reasons":["..."],"checks":["خطوات تحقق عملية"]}`;
 
 async function check(claim) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: "POST",
-    headers: { "x-api-key": KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    headers: { "x-goog-api-key": KEY, "content-type": "application/json" },
     body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2000,
-      system: SYSTEM(),
-      messages: [{ role: "user", content: `<claim>\n${claim}\n</claim>` }],
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+      systemInstruction: { parts: [{ text: SYSTEM() }] },
+      contents: [{ role: "user", parts: [{ text: `<claim>\n${claim}\n</claim>` }] }],
+      tools: [{ google_search: {} }],
+      generationConfig: { temperature: 0.2 },
     }),
   });
-  if (!r.ok) throw new Error("API " + r.status + " " + (await r.text()).slice(0, 300));
+  if (!r.ok) throw new Error("API " + r.status + " " + (await r.text()).slice(0, 400));
   const data = await r.json();
-  let text = "";
+  const cand = (data.candidates || [])[0] || {};
+  const text = ((cand.content || {}).parts || []).map(p => p.text || "").join("");
   const sources = new Map();
-  for (const b of data.content || []) {
-    if (b.type === "text") text += b.text;
-    if (b.type === "web_search_tool_result" && Array.isArray(b.content))
-      for (const s of b.content)
-        if (s.url && s.url.startsWith("https://") && !sources.has(s.url)) sources.set(s.url, s.title || s.url);
+  for (const c of (cand.groundingMetadata || {}).groundingChunks || []) {
+    const w = c.web;
+    if (w && w.uri && w.uri.startsWith("https://") && !sources.has(w.uri)) sources.set(w.uri, w.title || w.uri);
   }
   const a = text.indexOf("{"), z = text.lastIndexOf("}");
   const out = JSON.parse(text.slice(a, z + 1));
