@@ -64,7 +64,7 @@ function send(res, code, body, type = "application/json; charset=utf-8") {
 http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && (req.url === "/" || req.url === "/index.html"))
-      return send(res, 200, await readFile(join(DIR, "index.html")), "text/html; charset=utf-8");
+      return send(res, 200, await readFile(join(DIR, "index.html"), "utf8"), "text/html; charset=utf-8");
     if (req.url === "/healthz") return send(res, 200, { ok: true });
     if (req.method === "POST" && req.url === "/api/check") {
       const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
